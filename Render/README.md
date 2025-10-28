@@ -1,4 +1,4 @@
-# Stall:
+# Level 2 Stall:
 The general design of the stall is referenced from Ray Studio's tutorial video at https://youtu.be/iE6mZIICHxM with some detail changes. First, the outer split partition design is made using loop cuts on a cube to separate the regions and applying solidify to give it some volume.
  
 Another block is added within it to finish the base.
@@ -17,7 +17,7 @@ Next, we add a roof to the stall.
 
 
 
-# Gate terminal:
+# Level 2 Gate terminal:
 No references were made for this model. First, a cube object is rounded using the bevel tool.
  
 Then, a scanner for train tickets or pass is added to the top of the terminal on both sides using mirror tool.
