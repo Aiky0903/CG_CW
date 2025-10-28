@@ -15,3 +15,21 @@ Next, we add a roof to the stall.
 -	The partitions also use a wood material by Ksenia Starkova on https://starkosha.gumroad.com/l/vtfsb
 -	The internal block uses principled BSDF
 
+
+
+# Gate terminal:
+No references were made for this model. First, a cube object is rounded using the bevel tool.
+ 
+Then, a scanner for train tickets or pass is added to the top of the terminal on both sides using mirror tool.
+ 
+Then similarly, the direction panel (indicating direction of gate opening and closure) is added to the terminal on both sides using the mirror tool.
+ 
+Then, the hinges of the door are added to both sides of the terminal using the mirror tool.
+ 
+Then, the gate is attached to both sides of the hinges.
+ 
+
+## The materials used are as follows:
+-	Terminal uses principled BSDF with metallic properties.
+-	Scanner uses a modified stainless-steel material imported from BlenderKit
+-	The hinges and gates uses principled BSDF
