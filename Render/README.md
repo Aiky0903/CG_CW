@@ -65,3 +65,10 @@ The model is then loop cutted to add more vertices to act as vertical beams.
  
 ## Materials used for this model are as follows:
 -	Light iron material from BlenderKit
+
+# Level 2 Imports:
+-	Potted plant from BlenderKit
+-	Stool from BlenderKit
+-	Bananas, grapes, mangos from BlenderKit
+-	Bowl from BlenderKit
+-	Escalator by Alex1402 at  https://www.turbosquid.com/3d-models/escalator-2264462
