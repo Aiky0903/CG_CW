@@ -56,3 +56,12 @@ Lastly, the window is created.
 -	Text uses the emission material
 -	All other materials used are principled BSDF
 
+# Level 2 Barrier:
+The barriers are added to the scene at the end.
+First, a plane is folded and placed on the floor as a scaffold for the barrier.
+ 
+A wireframe modifier is added to the barrier along side with a skin modifier.
+The model is then loop cutted to add more vertices to act as vertical beams.
+ 
+## Materials used for this model are as follows:
+-	Light iron material from BlenderKit
