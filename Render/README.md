@@ -28,54 +28,10 @@ Then, the hinges of the door are added to both sides of the terminal using the m
  
 Then, the gate is attached to both sides of the hinges.
  
-
 ## The materials used are as follows:
 -	Terminal uses principled BSDF with metallic properties.
 -	Scanner uses a modified stainless-steel material imported from BlenderKit
 -	The hinges and gates uses principled BSDF
-
-Level 2 Ticket Counter:
-There are no references used for this model.
-First, a cube is created and its faces on the z-axis are removed. Then, a solidify modifier is added to give volume to the faces. The back face is then extended and subdivided into parts to model the door and doorframe on both sides.
- 
-Then, the faces on the left and right are also extended.
- 
-Then, some cuboids are attached to the sides of the counter as a serving table.
- 
-The roof is then attached to the top of the model.
- 
-Then, a cuboid is attached to the top of the model to serve as the light board.
- 
-Some texts are then added to the board.
- 
-Lastly, the window is created.
- 
-The materials used for this model are as follows:
--	Window uses transparent plastic material from BlenderKit
--	The board uses metallic BSDF
--	Text uses the emission material
--	All other materials used are principled BSDF
-Level 2 Ticket Counter:
-There are no references used for this model.
-First, a cube is created and its faces on the z-axis are removed. Then, a solidify modifier is added to give volume to the faces. The back face is then extended and subdivided into parts to model the door and doorframe on both sides.
- 
-Then, the faces on the left and right are also extended.
- 
-Then, some cuboids are attached to the sides of the counter as a serving table.
- 
-The roof is then attached to the top of the model.
- 
-Then, a cuboid is attached to the top of the model to serve as the light board.
- 
-Some texts are then added to the board.
- 
-Lastly, the window is created.
- 
-The materials used for this model are as follows:
--	Window uses transparent plastic material from BlenderKit
--	The board uses metallic BSDF
--	Text uses the emission material
--	All other materials used are principled BSDF
 
 
 # Level 2 Ticket Counter:
