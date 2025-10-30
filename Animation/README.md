@@ -1,10 +1,13 @@
 # Import Blender Model
 
 ## Import
+From Blender, we exported using .fbx files. Then we opened a new Unreal Engine project and imported the fbx files to the project. The initial import had a few issues with the model and light before needing to fix the materials and textures
 
 ## Model Fix
+The a few models looked like they were inverted including the road, the pavement, and one side of the train. To fix this, we flipped the normals of each of the models that looked inverted. This fixed most of the models
 
 ## Light Fix
+In the blender file, we rendered the scene using cycles. This means that the emission materials was used as a light source intead of the conventional light objects. In Unreal Engine, the materials could not light up the entire scene. Thus we had to add light objects to the scene. This included the the lamp post and the ceiling lights in the station and platform.
 
 # Fix Materials and Texture
 Most of the texture and materials imported to Unreal Engine nicely with some requiring minor color changes to match the blender model. The only real problem was the floor surface for the station and platform (middle and bottom level) and the emissive materials.
