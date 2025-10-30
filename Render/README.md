@@ -66,6 +66,9 @@ The model is then loop cutted to add more vertices to act as vertical beams.
 ## Materials used for this model are as follows:
 -	Light iron material from BlenderKit
 
+# Level 2 Floor:
+A cube was first created and scaled it to fit the floor size and volume. The material used for the floor is Ccl White Tiles 03 Bigger Gap Floor imported from BlenderKit
+
 # Level 2 Imports:
 -	Potted plant from BlenderKit
 -	Stool from BlenderKit
@@ -102,4 +105,10 @@ There are no references used for this model. This was added after the platform t
  
 ## The materials used for this model are as follows:
 -	Endesga 32 Palette used for the frame (https://lospec.com/palette-list/endesga-32)
--	The inner portion uses principled BSDF to added an emissive element. 
+-	The inner portion uses principled BSDF to added an emissive element.
+
+# Final Diorama:
+After all the floors are made, all the floors are scaled and appended to a final diorama file. Where each floor is connected by the escalators. Some materials are then modified to ensure that all models fit into the scene well. 
+
+# Render Settings:
+As the diorama is mainly lit by emission materials and do not have light objects, the render settings used for this diorama is Cycles. The render settings was changed from 2048 samples to 1024 samples. The denoise setting was also enabled.
