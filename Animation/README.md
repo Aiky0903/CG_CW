@@ -1,3 +1,20 @@
+# Import Blender Model
+
+## Import
+
+## Model Fix
+
+## Light Fix
+
+# Fix Materials and Texture
+Most of the texture and materials imported to Unreal Engine nicely with some requiring minor color changes to match the blender model. The only real problem was the floor surface for the station and platform (middle and bottom level) and the emissive materials.
+
+## Emissive Materials
+For the emissive materials, we added a scalar parameter for emissive strength for easy access. We then multiply with the base color to make and connected the node the the 'emission color' on the material node using blueprint. This was done to all emissive materials, with the only difference being the lamp post where that has a trancelucency to allow a light object to emit light from the position it.
+
+## Floor Surface
+The reason why the floor did not transfer from Blender to Unreal is because we used BlenderKit for those materials and the UV maps did not import with the model. With this, we decided to use Unreal Engines fab.com the floor materials and texture. For the station (middle floor) we added Seychelles Beige Marble Tiles (https://www.fab.com/listings/f96f2fbe-6935-4adb-820a-895c8968b0f5) and for the platform (lower level) we added Concrete Floor (https://www.fab.com/listings/7cd82969-789d-4d98-ad6c-b2e961df2fda) 
+
 # Camera animation
 First, we started off with the camera animation. This is achieved by creating an animation sequence along side with a camera object. The camera animation is relatively simple. We create keyframes that captures the transform variables of the camera object. As such, the camera will gradually move itself to the next keyframe based on its values. We then do this sequencially until it loops back to the point of origin.
 
