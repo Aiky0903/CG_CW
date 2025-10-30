@@ -72,3 +72,34 @@ The model is then loop cutted to add more vertices to act as vertical beams.
 -	Bananas, grapes, mangos from BlenderKit
 -	Bowl from BlenderKit
 -	Escalator by Alex1402 at  https://www.turbosquid.com/3d-models/escalator-2264462
+
+# Level 3 Train:
+The design was from a tutorial made from Imphenzia (https://www.youtube.com/watch?v=ar2ZOPddjTM). First was to cut the cube in half and mirror so that only one side is edited. Then the front top corners are dragged back to make a streamline front. Windows, doors, and headlights were modeled with inset and extrusions. For the wheels and the base, cylinders and squares were added and aligned so that four pairs of wheels are on the front and the back of the train. After modelling one train, it was the duplicated to make a double sided train.
+ 
+## The materials used for the model are as follows:
+-	Endesga 32 Palette used for the main body (https://lospec.com/palette-list/endesga-32)
+-	Own principled BSDF used for headlights and windows for emission and color. 
+
+
+
+# Level 3 Benches:
+No references were made for this model. First one of the legs was modelled by cutting a cube and moving the faces. the it was duplicated to make a pair of legs with the desired length. Then another cube was made long and thin to mimic the wooden part of the bench, to which then was duplicated to fill in the bench position.
+ 
+## The materials used are as follows:
+-	Endesga 32 Palette used for the main body (https://lospec.com/palette-list/endesga-32)
+
+
+# Level 3 Platform:
+The platform was the blender file that attaches everything together. First get the desired width and length (x and y) to match the other levels. then the train was and put into the position to make cuts so that there can be an indent where the train can be. After adding indents, the face was pulled down to make the indent then 2 more cubes were added to make the joint bars for the rails and aligned to the train wheel. Then another object was made using a cube that is narrowed and elongated to make rails. It is a separate object from the platform so that the array modifier can make multiple rails. Then after positioning the train to the rails, benches were added to fill in the blank positions.
+ 
+## Materials used for this model are as follows:
+-	Concrete floor from BlenderKit
+-	Endesga 32 Palette used for the wood portion of the rails (https://lospec.com/palette-list/endesga-32)
+
+
+# Level 3 Sign:
+There are no references used for this model. This was added after the platform to fill in the space. The it was made from a single cube that was narrowed and elongated to act as the frame. Then inset and extruded to make a the inner portion where the sign would be.
+ 
+## The materials used for this model are as follows:
+-	Endesga 32 Palette used for the frame (https://lospec.com/palette-list/endesga-32)
+-	The inner portion uses principled BSDF to added an emissive element. 
