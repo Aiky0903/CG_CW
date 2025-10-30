@@ -1,0 +1,2 @@
+# Train Diorama
+This diorama based of the levels of a train station including the surface enterance, the ticketing station and the platform with the train. We implemented low-poly models with cartoon materials using only realistic materials for the flooring.
