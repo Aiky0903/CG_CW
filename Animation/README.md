@@ -1,3 +1,6 @@
+# Unreal Engine Zip File
+Due to the size constraints, the Unreal Engine project cannot be fit into the GitHub Repository. Instead, here is the link to the OneDrive .zip file of the Unreal Engine Prjoect: https://heriotwatt-my.sharepoint.com/:u:/g/personal/mba2018_hw_ac_uk/ESjK5dIx6NhJkx2T0TPXCM4BpiiBu3xU_Cis3wyYTx_ZWw?e=PFggrG 
+
 # Import Blender Model
 
 ## Import
