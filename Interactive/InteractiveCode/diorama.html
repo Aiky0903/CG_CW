@@ -5,8 +5,100 @@
     <title>2024-2025 F2XGA: Example Lab</title>
     </head>
     <body>
-        <canvas width="512" height="512"></canvas>
+        <canvas width="1024" height="1024"></canvas>
         <script type="module">
+
+            function parseOBJ(text) {
+                const positions = [];
+                const normals = [];
+                const indices = [];
+                
+                const lines = text.split('\n');
+                
+                for (const line of lines) {
+                    const parts = line.trim().split(/\s+/);
+                    
+                    if (parts[0] === 'v') {
+                        positions.push(
+                            parseFloat(parts[1]),
+                            parseFloat(parts[2]),
+                            parseFloat(parts[3])
+                        );
+                    } else if (parts[0] === 'vn') {
+                        normals.push(
+                            parseFloat(parts[1]),
+                            parseFloat(parts[2]),
+                            parseFloat(parts[3])
+                        );
+                    } else if (parts[0] === 'f') {
+                        // Parse face indices (handles format: vertex/texture/normal)
+                        for (let i = 1; i < parts.length; i++) {
+                            const indices_str = parts[i].split('/');
+                            indices.push(parseInt(indices_str[0]) - 1); // OBJ uses 1-based indexing
+                        }
+                    }
+                }
+                
+                return { positions, normals, indices };
+            }
+
+            // --- Math helpers: bounding box, view/projection ---
+            function computeBounds(positions) {
+                const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+                const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+                for (let i = 0; i < positions.length; i += 3) {
+                    const x = positions[i], y = positions[i+1], z = positions[i+2];
+                    if (x < min[0]) min[0] = x; if (y < min[1]) min[1] = y; if (z < min[2]) min[2] = z;
+                    if (x > max[0]) max[0] = x; if (y > max[1]) max[1] = y; if (z > max[2]) max[2] = z;
+                }
+                const center = [(min[0]+max[0])/2, (min[1]+max[1])/2, (min[2]+max[2])/2];
+                const dx = max[0]-min[0], dy = max[1]-min[1], dz = max[2]-min[2];
+                const radius = Math.sqrt(dx*dx + dy*dy + dz*dz) / 2;
+                return { min, max, center, radius };
+            }
+
+            function lookAt(eye, center, up) {
+                const z0 = eye[0]-center[0], z1 = eye[1]-center[1], z2 = eye[2]-center[2];
+                let zlen = Math.hypot(z0,z1,z2); if (zlen===0) zlen=1;
+                const zx = z0 / zlen, zy = z1 / zlen, zz = z2 / zlen;
+                const ux = up[0], uy = up[1], uz = up[2];
+                let xx = uy*zz - uz*zy, xy = uz*zx - ux*zz, xz = ux*zy - uy*zx;
+                let xlen = Math.hypot(xx,xy,xz); if (xlen===0) xlen=1;
+                xx /= xlen; xy /= xlen; xz /= xlen;
+                const yx = zy* xz - zz* xy, yy = zz* xx - zx* xz, yz = zx* xy - zy* xx;
+                const m = new Float32Array(16);
+                m[0]=xx; m[1]=yx; m[2]=zx; m[3]=0;
+                m[4]=xy; m[5]=yy; m[6]=zy; m[7]=0;
+                m[8]=xz; m[9]=yz; m[10]=zz; m[11]=0;
+                m[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+                m[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+                m[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
+                m[15]=1;
+                return m;
+            }
+
+            function perspective(fovYRadians, aspect, near, far) {
+                const f = 1.0 / Math.tan(fovYRadians/2);
+                const m = new Float32Array(16);
+                m[0]=f/aspect; m[1]=0; m[2]=0; m[3]=0;
+                m[4]=0; m[5]=f; m[6]=0; m[7]=0;
+                m[8]=0; m[9]=0; m[10]=(far+near)/(near-far); m[11]=-1;
+                m[12]=0; m[13]=0; m[14]=(2*far*near)/(near-far); m[15]=0;
+                return m;
+            }
+
+            function multiplyMat4(a,b){
+                const out = new Float32Array(16);
+                for(let r=0;r<4;r++){
+                    for(let c=0;c<4;c++){
+                        let s=0;
+                        for(let k=0;k<4;k++) s += a[r + k*4] * b[k + c*4];
+                        out[r + c*4] = s;
+                    }
+                }
+                return out;
+            }
+
         async function main() {
             console.log("Checking for support, hardware and adapter.");
             if (!navigator.gpu) {
@@ -33,28 +125,77 @@
                 });
             console.log("Context received and configured.");
 
-            console.log("Creating shader module and render pipeline.");
-            const module = device.createShaderModule({
-            label: 'Simple Shader',
-            code: ` `
+             // Fetch and parse the OBJ file
+            const response = await fetch('./meshes/DioramaFinal_forWebGPU.obj');
+            const objText = await response.text();
+            const { positions, normals, indices } = parseOBJ(objText);
+            
+            // Create vertex buffer
+            const vertexBuffer = device.createBuffer({
+                label: 'vertex buffer',
+                size: positions.length * 4,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                mappedAtCreation: true,
             });
-            console.log("Shader module created.");
+            new Float32Array(vertexBuffer.getMappedRange()).set(positions);
+            vertexBuffer.unmap();
+            
+            // Create index buffer
+            const indexBuffer = device.createBuffer({
+                label: 'index buffer',
+                size: indices.length * 4,
+                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                mappedAtCreation: true,
+            });
+            new Uint32Array(indexBuffer.getMappedRange()).set(indices);
+            indexBuffer.unmap();
+            
+            const indexCount = indices.length;
+            
+            // Update shader with vertex and fragment shaders (use MVP uniform)
+            const module = device.createShaderModule({
+                label: 'OBJ Shader',
+                code: `
+                    struct Uniforms { mvp: mat4x4f, };
+                    @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
-            console.log("Creating render pipeline.");
+                    @vertex fn vs(
+                        @location(0) pos: vec3f
+                    ) -> @builtin(position) vec4f {
+                        return uniforms.mvp * vec4f(pos, 1.0);
+                    }
+
+                    @fragment fn fs() -> @location(0) vec4f {
+                        return vec4f(0.8, 0.2, 0.2, 1.0); // Red color
+                    }
+                `
+            });
+            
+            // Update pipeline with vertex buffer layout
             const pipeline = device.createRenderPipeline({
-                label: 'Hardcoded pipeline',
+                label: 'OBJ render pipeline',
                 layout: 'auto',
                 vertex: {
-                    //entryPoint: 'vs',
                     module,
+                    entryPoint: 'vs',
+                    buffers: [
+                        {
+                            arrayStride: 12, // 3 floats * 4 bytes
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                            ],
+                        },
+                    ],
                 },
                 fragment: {
-                    //entryPoint: 'fs',
                     module,
-                targets: [{ format: canvasFormat }],
+                    entryPoint: 'fs',
+                    targets: [{ format: canvasFormat }],
+                },
+                primitive: {
+                    topology: 'triangle-list',
                 },
             });
-            console.log("Render pipeline created.");
 
             const renderPassDescriptor = {
                 label: 'Basic canvas render pass',
@@ -67,18 +208,54 @@
                 },
                 ],
             };
+            // Compute model bounds and camera / projection parameters
+            const bounds = computeBounds(positions);
+            // choose a diagonal-ish direction and normalize
+            const dir = [1, 0.6, 1];
+            let dlen = Math.hypot(dir[0], dir[1], dir[2]); if (dlen === 0) dlen = 1;
+            dir[0] /= dlen; dir[1] /= dlen; dir[2] /= dlen;
+            const distance = bounds.radius * 3.5 + 1.0;
+            const eye = [bounds.center[0] + dir[0]*distance, bounds.center[1] + dir[1]*distance, bounds.center[2] + dir[2]*distance];
+            const target = bounds.center;
+            const up = [0,1,0];
 
+            const aspect = canvas.width / canvas.height;
+            const near = Math.max(bounds.radius * 0.01, 0.01);
+            const far = bounds.radius * 20 + 10;
+            const proj = perspective(Math.PI/3, aspect, near, far);
+            const view = lookAt(eye, target, up);
+            const mvp = multiplyMat4(proj, view);
+
+            // Create uniform buffer and bind group for the MVP
+            const uniformBuffer = device.createBuffer({
+                label: 'uniforms',
+                size: 64,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(uniformBuffer, 0, mvp);
+
+            const bindGroup = device.createBindGroup({
+                label: 'mvp bind group',
+                layout: pipeline.getBindGroupLayout(0),
+                entries: [ { binding: 0, resource: { buffer: uniformBuffer } } ],
+            });
+            
             function render() {
                 renderPassDescriptor.colorAttachments[0].view = context.getCurrentTexture().createView();
-                const encoder = device.createCommandEncoder({label:'the encoder'})
+                const encoder = device.createCommandEncoder({ label: 'the encoder' });
                 const pass = encoder.beginRenderPass(renderPassDescriptor);
                 pass.setPipeline(pipeline);
-                pass.draw(0);
+                pass.setBindGroup(0, bindGroup);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.setIndexBuffer(indexBuffer, 'uint32');
+                pass.drawIndexed(indexCount); // Draw all indices
                 pass.end();
                 const commandBuffer = encoder.finish();
                 device.queue.submit([commandBuffer]);
             }
 
+            
+            
             render();
         }
         main();
