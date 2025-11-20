@@ -1,264 +1,295 @@
 <!doctype html>
 <html>
-    <head>
+
+<head>
     <meta charset="utf-8">
     <title>2024-2025 F2XGA: Example Lab</title>
-    </head>
-    <body>
-        <canvas width="1024" height="1024"></canvas>
-        <script type="module">
+</head>
 
-            function parseOBJ(text) {
-                const positions = [];
-                const normals = [];
-                const indices = [];
-                
-                const lines = text.split('\n');
-                
-                for (const line of lines) {
-                    const parts = line.trim().split(/\s+/);
-                    
-                    if (parts[0] === 'v') {
-                        positions.push(
-                            parseFloat(parts[1]),
-                            parseFloat(parts[2]),
-                            parseFloat(parts[3])
-                        );
-                    } else if (parts[0] === 'vn') {
-                        normals.push(
-                            parseFloat(parts[1]),
-                            parseFloat(parts[2]),
-                            parseFloat(parts[3])
-                        );
-                    } else if (parts[0] === 'f') {
-                        // Parse face indices (handles format: vertex/texture/normal)
-                        for (let i = 1; i < parts.length; i++) {
-                            const indices_str = parts[i].split('/');
-                            indices.push(parseInt(indices_str[0]) - 1); // OBJ uses 1-based indexing
+<body>
+    <canvas width="1024" height="1024"></canvas>
+    <script type="module">
+        // Minimal OBJ parser with vt/vn support, builds interleaved buffer (pos,uv,normal)
+        function parseOBJWithUVs(text) {
+            const positions = [], uvs = [], normals = [];
+            const vertexMap = new Map();
+            const vertexData = [];
+            const indices = [];
+            let nextIndex = 0;
+            for (const line of text.split('\n')) {
+                const parts = line.trim().split(/\s+/);
+                if (!parts[0]) continue;
+                if (parts[0] === 'v') positions.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                else if (parts[0] === 'vt') uvs.push([parseFloat(parts[1]), 1.0 - parseFloat(parts[2])]);
+                else if (parts[0] === 'vn') normals.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                else if (parts[0] === 'f') {
+                    const face = parts.slice(1);
+                    const faceIdx = [];
+                    for (const token of face) {
+                        let vi = vertexMap.get(token);
+                        if (vi === undefined) {
+                            const [vStr, vtStr, vnStr] = token.split('/');
+                            const vIdx = parseInt(vStr) - 1;
+                            const vtIdx = vtStr ? parseInt(vtStr) - 1 : -1;
+                            const vnIdx = vnStr ? parseInt(vnStr) - 1 : -1;
+                            const p = positions[vIdx] || [0,0,0];
+                            const uv = vtIdx >= 0 ? uvs[vtIdx] : [0.5,0.5];
+                            const n = vnIdx >= 0 ? normals[vnIdx] : [0,1,0];
+                            vertexData.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
+                            vi = nextIndex++;
+                            vertexMap.set(token, vi);
                         }
+                        faceIdx.push(vi);
                     }
+                    for (let i = 1; i < faceIdx.length - 1; ++i) indices.push(faceIdx[0], faceIdx[i], faceIdx[i+1]);
                 }
-                
-                return { positions, normals, indices };
             }
+            return { vertexData: new Float32Array(vertexData), indices: new Uint32Array(indices) };
+        }
 
-            // --- Math helpers: bounding box, view/projection ---
-            function computeBounds(positions) {
-                const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
-                const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
-                for (let i = 0; i < positions.length; i += 3) {
-                    const x = positions[i], y = positions[i+1], z = positions[i+2];
-                    if (x < min[0]) min[0] = x; if (y < min[1]) min[1] = y; if (z < min[2]) min[2] = z;
-                    if (x > max[0]) max[0] = x; if (y > max[1]) max[1] = y; if (z > max[2]) max[2] = z;
+        // --- Math helpers: bounding box, view/projection ---
+        function computeBounds(positions) {
+            const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+            const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+            for (let i = 0; i < positions.length; i += 3) {
+                const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+                if (x < min[0]) min[0] = x; if (y < min[1]) min[1] = y; if (z < min[2]) min[2] = z;
+                if (x > max[0]) max[0] = x; if (y > max[1]) max[1] = y; if (z > max[2]) max[2] = z;
+            }
+            const center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+            const dx = max[0] - min[0], dy = max[1] - min[1], dz = max[2] - min[2];
+            const radius = Math.sqrt(dx * dx + dy * dy + dz * dz) / 2;
+            return { min, max, center, radius };
+        }
+
+        function lookAt(eye, center, up) {
+            const z0 = eye[0] - center[0], z1 = eye[1] - center[1], z2 = eye[2] - center[2];
+            let zlen = Math.hypot(z0, z1, z2); if (zlen === 0) zlen = 1;
+            const zx = z0 / zlen, zy = z1 / zlen, zz = z2 / zlen;
+            const ux = up[0], uy = up[1], uz = up[2];
+            let xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+            let xlen = Math.hypot(xx, xy, xz); if (xlen === 0) xlen = 1;
+            xx /= xlen; xy /= xlen; xz /= xlen;
+            const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+            const m = new Float32Array(16);
+            m[0] = xx; m[1] = yx; m[2] = zx; m[3] = 0;
+            m[4] = xy; m[5] = yy; m[6] = zy; m[7] = 0;
+            m[8] = xz; m[9] = yz; m[10] = zz; m[11] = 0;
+            m[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+            m[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+            m[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+            m[15] = 1;
+            return m;
+        }
+
+        function perspective(fovYRadians, aspect, near, far) {
+            const f = 1.0 / Math.tan(fovYRadians / 2);
+            const m = new Float32Array(16);
+            m[0] = f / aspect; m[1] = 0; m[2] = 0; m[3] = 0;
+            m[4] = 0; m[5] = f; m[6] = 0; m[7] = 0;
+            m[8] = 0; m[9] = 0; m[10] = (far + near) / (near - far); m[11] = -1;
+            m[12] = 0; m[13] = 0; m[14] = (2 * far * near) / (near - far); m[15] = 0;
+            return m;
+        }
+
+        function multiplyMat4(a, b) {
+            const out = new Float32Array(16);
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    let s = 0;
+                    for (let k = 0; k < 4; k++) s += a[r + k * 4] * b[k + c * 4];
+                    out[r + c * 4] = s;
                 }
-                const center = [(min[0]+max[0])/2, (min[1]+max[1])/2, (min[2]+max[2])/2];
-                const dx = max[0]-min[0], dy = max[1]-min[1], dz = max[2]-min[2];
-                const radius = Math.sqrt(dx*dx + dy*dy + dz*dz) / 2;
-                return { min, max, center, radius };
             }
+            return out;
+        }
 
-            function lookAt(eye, center, up) {
-                const z0 = eye[0]-center[0], z1 = eye[1]-center[1], z2 = eye[2]-center[2];
-                let zlen = Math.hypot(z0,z1,z2); if (zlen===0) zlen=1;
-                const zx = z0 / zlen, zy = z1 / zlen, zz = z2 / zlen;
-                const ux = up[0], uy = up[1], uz = up[2];
-                let xx = uy*zz - uz*zy, xy = uz*zx - ux*zz, xz = ux*zy - uy*zx;
-                let xlen = Math.hypot(xx,xy,xz); if (xlen===0) xlen=1;
-                xx /= xlen; xy /= xlen; xz /= xlen;
-                const yx = zy* xz - zz* xy, yy = zz* xx - zx* xz, yz = zx* xy - zy* xx;
-                const m = new Float32Array(16);
-                m[0]=xx; m[1]=yx; m[2]=zx; m[3]=0;
-                m[4]=xy; m[5]=yy; m[6]=zy; m[7]=0;
-                m[8]=xz; m[9]=yz; m[10]=zz; m[11]=0;
-                m[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
-                m[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
-                m[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
-                m[15]=1;
-                return m;
-            }
+        async function loadImageBitmap(url) {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            console.log(await blob.text());
+            // const text = await blob.text();
+            const imageBitMap = await createImageBitmap(blob);
+            // let materialCount = 0;
+            // let materials = [], imageTextures = [];
 
-            function perspective(fovYRadians, aspect, near, far) {
-                const f = 1.0 / Math.tan(fovYRadians/2);
-                const m = new Float32Array(16);
-                m[0]=f/aspect; m[1]=0; m[2]=0; m[3]=0;
-                m[4]=0; m[5]=f; m[6]=0; m[7]=0;
-                m[8]=0; m[9]=0; m[10]=(far+near)/(near-far); m[11]=-1;
-                m[12]=0; m[13]=0; m[14]=(2*far*near)/(near-far); m[15]=0;
-                return m;
-            }
 
-            function multiplyMat4(a,b){
-                const out = new Float32Array(16);
-                for(let r=0;r<4;r++){
-                    for(let c=0;c<4;c++){
-                        let s=0;
-                        for(let k=0;k<4;k++) s += a[r + k*4] * b[k + c*4];
-                        out[r + c*4] = s;
-                    }
-                }
-                return out;
-            }
+            // const lines = text.split('\n');
+            // for (const line of lines) {
+            //     const parts = line.trim().split(/\s+/);
+            //     if (parts[0] === 'newmtl') {
+            //         materials.push({ name: parts[1] })
+            //         imageTextures.push(null);
+            //         materialCount++
+            //     }
+
+            //     if (parts[0] === 'map_Kd') {
+            //         imageTextures[materialCount - 1] = parts[1];
+            //     }
+            // }
+            // return [[materials, imageTextures]];
+            return 1;
+        }
 
         async function main() {
-            console.log("Checking for support, hardware and adapter.");
-            if (!navigator.gpu) {
-                throw new Error("WebGPU not supported by your browser.");
-            }
+            if (!navigator.gpu) { alert('WebGPU not supported'); return; }
             const adapter = await navigator.gpu.requestAdapter();
-            if (!adapter){
-                throw new Error("WebGPU Supported but not appropriate hardware.");
-            }
             const device = await adapter.requestDevice();
-            if (!device) {
-                throw new Error("Error supporting WebGPU in your browser");
-            } else {
-                console.log("WebGPU is supported and appropriate hardware found.");
+
+            const canvas = document.querySelector('canvas');
+            const context = canvas.getContext('webgpu');
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({ device, format: canvasFormat });
+
+            // Load OBJ and build interleaved vertices
+            const objRes = await fetch('./meshes/DioramaFinal_forWebGPU_UVTEST.obj');
+            const objText = await objRes.text();
+            const { vertexData, indices } = parseOBJWithUVs(objText);
+
+            // Find mtllib in OBJ and parse the MTL for map_Kd
+            let mtlName = null;
+            for (const line of objText.split('\n')) {
+                const p = line.trim().split(/\s+/);
+                if (p[0] === 'mtllib') { mtlName = p[1]; break; }
+            }
+            let mapKd = null;
+            if (mtlName) {
+                try {
+                    const mtlRes = await fetch(`./textures/${mtlName}`);
+                    if (mtlRes.ok) {
+                        const mtlText = await mtlRes.text();
+                        for (const line of mtlText.split('\n')) {
+                            const l = line.trim();
+                            if (!l) continue;
+                            const parts = l.split(/\s+/);
+                            if (parts[0] === 'map_Kd') {
+                                const tokens = parts.slice(1);
+                                for (let i = tokens.length - 1; i >= 0; --i) {
+                                    const t = tokens[i];
+                                    if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { mapKd = t.replace(/\\/g,'/'); break; }
+                                }
+                                if (!mapKd) mapKd = tokens[tokens.length - 1];
+                                break;
+                            }
+                        }
+                    }
+                } catch(e) { console.warn('mtl load failed', e); }
+            }
+            let texInfo = null;
+            if (mapKd) {
+                const fname = mapKd.split('/').pop();
+                const candidates = [`./meshes/${fname}`, `./textures/${fname}`, fname];
+                for (const url of candidates) {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) continue;
+                        const ct = (res.headers.get('content-type') || '').toLowerCase();
+                        if (ct.startsWith('text') || ct.includes('html')) continue;
+                        const blob = await res.blob();
+                        const bitmap = await createImageBitmap(blob);
+                        const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+                        device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
+                        texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear' }) };
+                        break;
+                    } catch (e) { console.warn('texture candidate failed', url, e); }
+                }
+            }
+            if (!texInfo) {
+                // fallback: 1x1 white
+                const data = new Uint8Array([255,255,255,255]);
+                const tex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+                device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: 4 }, [1,1]);
+                texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter:'linear', minFilter:'linear' }) };
             }
 
-            console.log("Getting the WebGPU context from our canvas element and configuring it.");
-                const canvas = document.querySelector('canvas');
-                const context = canvas.getContext('webgpu');
-                const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
-                context.configure({
-                    device,
-                    format: canvasFormat,
-                });
-            console.log("Context received and configured.");
-
-             // Fetch and parse the OBJ file
-            const response = await fetch('./meshes/DioramaFinal_forWebGPU.obj');
-            const objText = await response.text();
-            const { positions, normals, indices } = parseOBJ(objText);
-            
-            // Create vertex buffer
-            const vertexBuffer = device.createBuffer({
-                label: 'vertex buffer',
-                size: positions.length * 4,
-                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-                mappedAtCreation: true,
-            });
-            new Float32Array(vertexBuffer.getMappedRange()).set(positions);
+            // create GPU buffers
+            const vertexBuffer = device.createBuffer({ label: 'vb', size: vertexData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
+            new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
             vertexBuffer.unmap();
-            
-            // Create index buffer
-            const indexBuffer = device.createBuffer({
-                label: 'index buffer',
-                size: indices.length * 4,
-                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-                mappedAtCreation: true,
-            });
+
+            const indexBuffer = device.createBuffer({ label: 'ib', size: indices.length * 4, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
             new Uint32Array(indexBuffer.getMappedRange()).set(indices);
             indexBuffer.unmap();
-            
             const indexCount = indices.length;
-            
-            // Update shader with vertex and fragment shaders (use MVP uniform)
-            const module = device.createShaderModule({
-                label: 'OBJ Shader',
-                code: `
-                    struct Uniforms { mvp: mat4x4f, };
-                    @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
-                    @vertex fn vs(
-                        @location(0) pos: vec3f
-                    ) -> @builtin(position) vec4f {
-                        return uniforms.mvp * vec4f(pos, 1.0);
-                    }
+            // shader (MVP + sampler + texture)
+            const module = device.createShaderModule({ code: `
+                struct Uniforms { mvp: mat4x4f };
+                @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+                @group(0) @binding(1) var samp: sampler;
+                @group(0) @binding(2) var tex: texture_2d<f32>;
 
-                    @fragment fn fs() -> @location(0) vec4f {
-                        return vec4f(0.8, 0.2, 0.2, 1.0); // Red color
-                    }
-                `
-            });
-            
-            // Update pipeline with vertex buffer layout
+                struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) normal: vec3f };
+
+                @vertex fn vs(@location(0) pos: vec3f, @location(1) uv: vec2f, @location(2) normal: vec3f) -> VOut {
+                    var o: VOut; o.pos = uniforms.mvp * vec4f(pos, 1.0); o.uv = uv; o.normal = normal; return o;
+                }
+
+                @fragment fn fs(i: VOut) -> @location(0) vec4f {
+                    let c = textureSample(tex, samp, i.uv);
+                    let light = max(dot(normalize(i.normal), normalize(vec3f(1.0,1.0,1.0))), 0.0);
+                    let ambient = 0.25;
+                    return vec4f(c.rgb * (ambient + 0.75 * light), c.a);
+                }
+            ` });
+
+            // Create pipeline with depth/stencil and disable face culling initially
             const pipeline = device.createRenderPipeline({
-                label: 'OBJ render pipeline',
                 layout: 'auto',
-                vertex: {
-                    module,
-                    entryPoint: 'vs',
-                    buffers: [
-                        {
-                            arrayStride: 12, // 3 floats * 4 bytes
-                            attributes: [
-                                { shaderLocation: 0, offset: 0, format: 'float32x3' },
-                            ],
-                        },
-                    ],
-                },
-                fragment: {
-                    module,
-                    entryPoint: 'fs',
-                    targets: [{ format: canvasFormat }],
-                },
-                primitive: {
-                    topology: 'triangle-list',
-                },
+                vertex: { module, entryPoint: 'vs', buffers: [{ arrayStride: 32, attributes: [{ shaderLocation:0, offset:0, format:'float32x3' }, { shaderLocation:1, offset:12, format:'float32x2' }, { shaderLocation:2, offset:20, format:'float32x3' }] }] },
+                fragment: { module, entryPoint: 'fs', targets: [{ format: canvasFormat }] },
+                primitive: { topology: 'triangle-list', cullMode: 'none' },
+                depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
             });
 
-            const renderPassDescriptor = {
-                label: 'Basic canvas render pass',
-                colorAttachments: [
-                {
-                    // view: <- to be filled out when we render
-                    clearValue: [1.0, 0.75, 0.60, 1.0],
-                    loadOp: 'clear', // clear or store (draw on top)
-                    storeOp: 'store', // store or clear (throw away)
-                },
-                ],
-            };
-            // Compute model bounds and camera / projection parameters
-            const bounds = computeBounds(positions);
-            // choose a diagonal-ish direction and normalize
-            const dir = [1, 0.6, 1];
-            let dlen = Math.hypot(dir[0], dir[1], dir[2]); if (dlen === 0) dlen = 1;
-            dir[0] /= dlen; dir[1] /= dlen; dir[2] /= dlen;
+            // compute camera MVP
+            const posArray = [];
+            for (let i = 0; i < vertexData.length; i += 8) posArray.push(vertexData[i], vertexData[i+1], vertexData[i+2]);
+            const bounds = computeBounds(posArray);
+            const dir = [1,0.6,1]; let dlen = Math.hypot(...dir); if (dlen===0) dlen=1; dir[0]/=dlen; dir[1]/=dlen; dir[2]/=dlen;
             const distance = bounds.radius * 3.5 + 1.0;
             const eye = [bounds.center[0] + dir[0]*distance, bounds.center[1] + dir[1]*distance, bounds.center[2] + dir[2]*distance];
-            const target = bounds.center;
-            const up = [0,1,0];
-
-            const aspect = canvas.width / canvas.height;
-            const near = Math.max(bounds.radius * 0.01, 0.01);
-            const far = bounds.radius * 20 + 10;
-            const proj = perspective(Math.PI/3, aspect, near, far);
-            const view = lookAt(eye, target, up);
+            const view = lookAt(eye, bounds.center, [0,1,0]);
+            const proj = perspective(Math.PI/3, canvas.width/canvas.height, Math.max(bounds.radius*0.01,0.01), bounds.radius*20+10);
             const mvp = multiplyMat4(proj, view);
 
-            // Create uniform buffer and bind group for the MVP
-            const uniformBuffer = device.createBuffer({
-                label: 'uniforms',
-                size: 64,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
+            const uniformBuffer = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
             device.queue.writeBuffer(uniformBuffer, 0, mvp);
 
-            const bindGroup = device.createBindGroup({
-                label: 'mvp bind group',
-                layout: pipeline.getBindGroupLayout(0),
-                entries: [ { binding: 0, resource: { buffer: uniformBuffer } } ],
-            });
-            
+            const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [ { binding:0, resource:{ buffer: uniformBuffer } }, { binding:1, resource: texInfo.sampler }, { binding:2, resource: texInfo.view } ] });
+
+            // Create a depth texture to enable proper depth testing so triangles render correctly
+            let depthTexture = device.createTexture({ size: [canvas.width, canvas.height, 1], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
+            const renderPassDescriptor = {
+                colorAttachments: [{ clearValue:[1,0.9,0.8,1], loadOp:'clear', storeOp:'store' }],
+                depthStencilAttachment: { view: depthTexture.createView(), depthClearValue: 1.0, depthLoadOp: 'clear', depthStoreOp: 'store' }
+            };
+
             function render() {
-                renderPassDescriptor.colorAttachments[0].view = context.getCurrentTexture().createView();
-                const encoder = device.createCommandEncoder({ label: 'the encoder' });
-                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                // If canvas size changed, recreate depth texture
+                const curTex = context.getCurrentTexture();
+                renderPassDescriptor.colorAttachments[0].view = curTex.createView();
+                const gfxWidth = canvas.width, gfxHeight = canvas.height;
+                // simple resize check
+                if (depthTexture.width !== gfxWidth || depthTexture.height !== gfxHeight) {
+                    depthTexture = device.createTexture({ size: [gfxWidth, gfxHeight, 1], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
+                    renderPassDescriptor.depthStencilAttachment.view = depthTexture.createView();
+                }
+                const cmd = device.createCommandEncoder();
+                const pass = cmd.beginRenderPass(renderPassDescriptor);
                 pass.setPipeline(pipeline);
                 pass.setBindGroup(0, bindGroup);
                 pass.setVertexBuffer(0, vertexBuffer);
                 pass.setIndexBuffer(indexBuffer, 'uint32');
-                pass.drawIndexed(indexCount); // Draw all indices
+                pass.drawIndexed(indexCount);
                 pass.end();
-                const commandBuffer = encoder.finish();
-                device.queue.submit([commandBuffer]);
+                device.queue.submit([cmd.finish()]);
             }
 
-            
-            
             render();
         }
         main();
-        </script>
-    </body>
+    </script>
+</body>
+
 </html>
