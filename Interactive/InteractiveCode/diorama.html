@@ -104,6 +104,62 @@
             return out;
         }
 
+        // Compute per-vertex tangents for normal mapping
+        function computeTangentsFromVertexData(vertexData, indices) {
+            const vertCount = vertexData.length / 8;
+            const tan1 = new Float32Array(vertCount * 3);
+            const tan2 = new Float32Array(vertCount * 3);
+            function addVec(dst, idx, x, y, z) { dst[idx*3+0]+=x; dst[idx*3+1]+=y; dst[idx*3+2]+=z; }
+
+            for (let i = 0; i < indices.length; i += 3) {
+                const i0 = indices[i], i1 = indices[i+1], i2 = indices[i+2];
+                const p0x = vertexData[i0*8+0], p0y = vertexData[i0*8+1], p0z = vertexData[i0*8+2];
+                const p1x = vertexData[i1*8+0], p1y = vertexData[i1*8+1], p1z = vertexData[i1*8+2];
+                const p2x = vertexData[i2*8+0], p2y = vertexData[i2*8+1], p2z = vertexData[i2*8+2];
+
+                const uv0x = vertexData[i0*8+3], uv0y = vertexData[i0*8+4];
+                const uv1x = vertexData[i1*8+3], uv1y = vertexData[i1*8+4];
+                const uv2x = vertexData[i2*8+3], uv2y = vertexData[i2*8+4];
+
+                const x1 = p1x - p0x, y1 = p1y - p0y, z1 = p1z - p0z;
+                const x2 = p2x - p0x, y2 = p2y - p0y, z2 = p2z - p0z;
+
+                const s1 = uv1x - uv0x, t1 = uv1y - uv0y;
+                const s2 = uv2x - uv0x, t2 = uv2y - uv0y;
+
+                let r = (s1 * t2 - s2 * t1);
+                if (r === 0) r = 1e-6;
+                r = 1.0 / r;
+                const sx = (t2 * x1 - t1 * x2) * r;
+                const sy = (t2 * y1 - t1 * y2) * r;
+                const sz = (t2 * z1 - t1 * z2) * r;
+                const tx = (s1 * x2 - s2 * x1) * r;
+                const ty = (s1 * y2 - s2 * y1) * r;
+                const tz = (s1 * z2 - s2 * z1) * r;
+
+                addVec(tan1, i0, sx, sy, sz);
+                addVec(tan1, i1, sx, sy, sz);
+                addVec(tan1, i2, sx, sy, sz);
+
+                addVec(tan2, i0, tx, ty, tz);
+                addVec(tan2, i1, tx, ty, tz);
+                addVec(tan2, i2, tx, ty, tz);
+            }
+
+            const tangents = new Float32Array(vertCount * 3);
+            for (let i = 0; i < vertCount; ++i) {
+                const nx = vertexData[i*8 + 5], ny = vertexData[i*8 + 6], nz = vertexData[i*8 + 7];
+                let tx = tan1[i*3+0], ty = tan1[i*3+1], tz = tan1[i*3+2];
+                const dotNT = nx*tx + ny*ty + nz*tz;
+                tx = tx - nx*dotNT; ty = ty - ny*dotNT; tz = tz - nz*dotNT;
+                let len = Math.hypot(tx, ty, tz);
+                if (len === 0) { tx = 1; ty = 0; tz = 0; len = 1; }
+                tx /= len; ty /= len; tz /= len;
+                tangents[i*3+0] = tx; tangents[i*3+1] = ty; tangents[i*3+2] = tz;
+            }
+            return tangents;
+        }
+
         async function loadImageBitmap(url) {
             const res = await fetch(url);
             const blob = await res.blob();
@@ -142,7 +198,7 @@
             context.configure({ device, format: canvasFormat });
 
             // Load OBJ and build interleaved vertices
-            const objRes = await fetch('./meshes/DioramaFinal_forWebGPU_UVTEST.obj');
+            const objRes = await fetch('./meshes/DioramaFinal_forWebGPU_Baking_Fixed_Emission.obj');
             const objText = await objRes.text();
             const { vertexData, indices } = parseOBJWithUVs(objText);
 
@@ -152,12 +208,13 @@
                 const p = line.trim().split(/\s+/);
                 if (p[0] === 'mtllib') { mtlName = p[1]; break; }
             }
+            let mtlText = null;
             let mapKd = null;
             if (mtlName) {
                 try {
                     const mtlRes = await fetch(`./textures/${mtlName}`);
                     if (mtlRes.ok) {
-                        const mtlText = await mtlRes.text();
+                        mtlText = await mtlRes.text();
                         for (const line of mtlText.split('\n')) {
                             const l = line.trim();
                             if (!l) continue;
@@ -202,6 +259,109 @@
                 texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter:'linear', minFilter:'linear' }) };
             }
 
+            // Parse MTL for normal and roughness maps (if we fetched the MTL earlier)
+            let normalView = null;
+            let roughView = null;
+            let emissionView = null;
+            const sampler = texInfo.sampler;
+            if (mtlText) {
+                let normalName = null, roughName = null;
+                let emissionName = null;
+                for (const line of mtlText.split('\n')) {
+                    const l = line.trim(); if (!l) continue;
+                    const parts = l.split(/\s+/);
+                    const key = parts[0];
+                    console.log(key)
+                    const tokens = parts.slice(1);
+                    if (!tokens.length) continue;
+                    // common keys for normal maps in some workflows
+                    if (!normalName && (key === 'map_Bump' || key.toLowerCase() === 'bump' || key === 'map_bump')) {
+                        for (let i = tokens.length - 1; i >= 0; --i) {
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { normalName = t.replace(/\\/g,'/'); break; }
+                        }
+                        if (!normalName) normalName = tokens[tokens.length-1];
+                    }
+                    // try to detect roughness maps (non-standard in OBJ/MTL, common keys vary)
+                    if (!roughName && (key.toLowerCase().includes('rough') || key === 'map_Ns' || key.toLowerCase().includes('ns'))) {
+
+                        for (let i = tokens.length - 1; i >= 0; --i) {
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { roughName = t.replace(/\\/g,'/'); break; }
+                        }
+                        if (!roughName) roughName = tokens[tokens.length-1];
+                    }
+                    // emission map (Blender exports as map_Ke)
+                    if (!emissionName && (key === 'map_Ke' || key.toLowerCase() === 'map_ke' || key.toLowerCase().includes('emission') || key.toLowerCase() === 'ke')) {
+                        for (let i = tokens.length - 1; i >= 0; --i) {
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { emissionName = t.replace(/\\/g,'/'); break; }
+                        }
+                        if (!emissionName) emissionName = tokens[tokens.length-1];
+                    }
+                    if (normalName && roughName && emissionName) break;
+                }
+
+                async function tryLoadView(name) {
+                    if (!name) return null;
+                    // keep both the token (may include a folder) and the basename
+                    const token = name;
+                    const fname = name.split('/').pop();
+                    const candidates = [
+                        `./textures/${token}`,   // e.g., ./textures/UVs/Roughness.png
+                        `./meshes/${token}`,     // e.g., ./meshes/UVs/Roughness.png
+                        token,                   // e.g., UVs/Roughness.png (relative to root)
+                        `./textures/${fname}`,   // e.g., ./textures/Roughness.png (basename only)
+                        `./meshes/${fname}`,     // e.g., ./meshes/Roughness.png (basename only)
+                        fname                    // e.g., Roughness.png (basename only, relative to root)
+                    ];
+                    for (const url of candidates) {
+                        try {
+                            console.log('trying texture candidate:', url, 'for', name);
+                            const res = await fetch(url);
+                            if (!res.ok) { console.log('not ok', url, res.status); continue; }
+                            const ct = (res.headers.get('content-type') || '').toLowerCase();
+                            if (ct.startsWith('text') || ct.includes('html')) { console.log('skipping non-image', url, ct); continue; }
+                            const blob = await res.blob();
+                            const bitmap = await createImageBitmap(blob);
+                            // Use srgb format for better color handling (Blender baked textures are in sRGB)
+                            const format = (name.toLowerCase().includes('emission') || name.toLowerCase().includes('ke')) ? 'rgba8unorm-srgb' : 'rgba8unorm';
+                            const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+                            device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
+                            console.log('loaded texture', name, 'from', url, 'with format', format);
+                            return tex.createView();
+                        } catch(e) { console.warn('candidate failed', url, e); }
+                    }
+                    console.warn('failed to load texture for', name);
+                    return null;
+                }
+
+                normalView = await tryLoadView(normalName);
+                roughView = await tryLoadView(roughName);
+                const emissionViewLoaded = await tryLoadView(emissionName);
+                emissionView = emissionViewLoaded;
+            }
+
+            // Create fallbacks if normal/roughness are missing
+            if (!normalView) {
+                const ndata = new Uint8Array([128,128,255,255]);
+                const ntex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+                device.queue.writeTexture({ texture: ntex }, ndata, { bytesPerRow: 4 }, [1,1]);
+                normalView = ntex.createView();
+            }
+            if (!roughView) {
+                const rdata = new Uint8Array([128,128,128,255]);
+                const rtex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+                device.queue.writeTexture({ texture: rtex }, rdata, { bytesPerRow: 4 }, [1,1]);
+                roughView = rtex.createView();
+            }
+
+            // emission fallback (dark gray for better visibility)
+            if (typeof emissionView === 'undefined' || !emissionView) {
+                console.log('Creating fallback emissionView (was null or undefined)');
+                const edata = new Uint8Array([50,50,50,255]);
+                const etex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm-srgb', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+                device.queue.writeTexture({ texture: etex }, edata, { bytesPerRow: 4 }, [1,1]);
+                emissionView = etex.createView();
+            }
+
             // create GPU buffers
             const vertexBuffer = device.createBuffer({ label: 'vb', size: vertexData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
             new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
@@ -212,12 +372,14 @@
             indexBuffer.unmap();
             const indexCount = indices.length;
 
-            // shader (MVP + sampler + texture)
+            // shader (MVP + sampler + albedo + emission + roughness)
             const module = device.createShaderModule({ code: `
                 struct Uniforms { mvp: mat4x4f };
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
                 @group(0) @binding(1) var samp: sampler;
-                @group(0) @binding(2) var tex: texture_2d<f32>;
+                @group(0) @binding(2) var albedo: texture_2d<f32>;
+                @group(0) @binding(3) var emissionTex: texture_2d<f32>;
+                @group(0) @binding(4) var roughMap: texture_2d<f32>;
 
                 struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) normal: vec3f };
 
@@ -225,11 +387,37 @@
                     var o: VOut; o.pos = uniforms.mvp * vec4f(pos, 1.0); o.uv = uv; o.normal = normal; return o;
                 }
 
+                fn clamp01(x: f32) -> f32 { return max(0.0, min(1.0, x)); }
+
                 @fragment fn fs(i: VOut) -> @location(0) vec4f {
-                    let c = textureSample(tex, samp, i.uv);
-                    let light = max(dot(normalize(i.normal), normalize(vec3f(1.0,1.0,1.0))), 0.0);
-                    let ambient = 0.25;
-                    return vec4f(c.rgb * (ambient + 0.75 * light), c.a);
+                    let c = textureSample(albedo, samp, i.uv);
+                    let e = textureSample(emissionTex, samp, i.uv);
+                    let roughSample = textureSample(roughMap, samp, i.uv);
+                    let rough = roughSample.r;
+                    
+                    let N = normalize(i.normal);
+                    let L = normalize(vec3f(1.0,1.0,1.0));
+                    let V = normalize(vec3f(-0.5, -0.3, 1.0));
+                    let ambient = 0.3;
+                    let NdotL = max(dot(N, L), 0.0);
+                    let diffuse = c.rgb * NdotL;
+                    
+                    // Roughness: 0=shiny, 1=dull
+                    let shininess = mix(1024.0, 2.0, clamp01(rough));
+                    let H = normalize(L + V);
+                    let specPower = pow(max(dot(N, H), 0.0), shininess);
+                    let specular = vec3f(specPower) * 10.0;
+                    
+                    // Emission: use the brightest channel to boost visibility
+                    // This works well for baked emission maps that may have subtle values
+                    let emissionBrightness = max(max(e.r, e.g), e.b);
+                    let emissionBoost = emissionBrightness * 200.0;
+                    let emission = e.rgb * emissionBoost;
+                    
+                    let color = vec3f(ambient * c.rgb) + diffuse + specular + emission;
+                    // Apply simple tone mapping to prevent oversaturation but allow bright areas
+                    let toneMapped = color / (color + vec3f(1.0));
+                    return vec4f(toneMapped, c.a);
                 }
             ` });
 
@@ -256,7 +444,9 @@
             const uniformBuffer = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
             device.queue.writeBuffer(uniformBuffer, 0, mvp);
 
-            const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [ { binding:0, resource:{ buffer: uniformBuffer } }, { binding:1, resource: texInfo.sampler }, { binding:2, resource: texInfo.view } ] });
+            console.log('Creating bind group with:', { emissionView, roughView, normalView });
+            const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [ { binding:0, resource:{ buffer: uniformBuffer } }, { binding:1, resource: texInfo.sampler }, { binding:2, resource: texInfo.view }, { binding:3, resource: emissionView }, { binding:4, resource: roughView } ] });
+            console.log('Bind group created successfully');
 
             // Create a depth texture to enable proper depth testing so triangles render correctly
             let depthTexture = device.createTexture({ size: [canvas.width, canvas.height, 1], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
