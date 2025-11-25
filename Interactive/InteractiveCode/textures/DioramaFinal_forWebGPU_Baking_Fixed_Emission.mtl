@@ -1,0 +1,12 @@
+# Blender 5.0.0 MTL File: 'DioramaFinal_forWebGPU_Baking_Fixed_Emission.blend'
+# www.blender.org
+
+newmtl Combined
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd UVs/BakingDiffuse4.png
+map_Ns UVs/Roughness.png
+map_Ke UVs/Emission.png
