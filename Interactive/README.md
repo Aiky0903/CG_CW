@@ -29,7 +29,7 @@ Initially, the file initializes a WebGPU context on a canvas element. This creat
 
 These arrays are then put through a VertexBuffer and IndexBuffer to upload the vertex and index data to the GPU. With this, the buffers are ready and rendering can begin. In the render loop, the rendering pipeline is set and all buffers are binded appropriately. After the buffers are binded, it issues calls to render the geometry onto the canvas. Then, the render is submitted to the GPU to be outputted on the screen.
 
-### Materials and Shaders
+### Materials, Shaders and Lighting
 
 Materials are defined by four main texture maps—color, normal, roughness, and emission specified in the model’s MTL file:
 
@@ -37,6 +37,8 @@ Materials are defined by four main texture maps—color, normal, roughness, and 
 - **Normal map:** Adds bumps and small details to the surface.
 - **Roughness map:** Controls if the surface looks shiny or matte.
 - **Emission map:** Makes parts of the model glow.
+
+For lighting,  single point light is placed above the diorama, and each pixel’s color is affected by ambient, diffuse, and specular light. The normal and roughness maps control how light reflects off the surface, making highlights sharper or softer. 
 
 These textures are loaded and used in the fragment shader to create realistic materials. The shaders are written in WGSL and included in `diorama.html`.
 
