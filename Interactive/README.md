@@ -31,7 +31,7 @@ These arrays are then put through a VertexBuffer and IndexBuffer to upload the v
 
 ### Materials and Shaders
 
-Materials are defined by four main texture maps—color, normal, roughness, and emission specified in the model’s MTL file:
+Materials are defined by four main texture maps: color, normal, roughness, and emission specified in the model’s MTL file:
 
 - **Color map:** Sets the main color of the surface.
 - **Normal map:** Adds bumps and small details to the surface.
