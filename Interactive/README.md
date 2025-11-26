@@ -1,7 +1,7 @@
 ## Interactive Diorama WebGPU Viewer
 
 ### Description
-This project is a real-time 3D diorama viewer built with WebGPU. It loads OBJ models exported from Blender, applies physically-based materials, and features advanced lighting, emission, and post-processing effects. Users can interactively explore the scene with smooth camera controls and UI adjustments.
+This project is a real-time 3D diorama viewer built with WebGPU. It loads OBJ models exported from Blender and reads material properties (like color, normal, roughness, and emission maps) from the accompanying MTL file. The viewer features the scene with lighting, emission, and post-processing effects. Users can interactively explore the scene using mouse controls to control the camera and adjust scene brightness.
 
 ### Features
 - OBJ file import (from Blender)
