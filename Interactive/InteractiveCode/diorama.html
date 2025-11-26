@@ -7,7 +7,8 @@
 </head>
 
 <body>
-    <canvas width="1024" height="1024"></canvas>
+    <canvas
+        style="width:calc(100vw - 40px);height:calc(100vh - 40px);display:block;margin:20px auto;box-shadow:0 0 12px rgba(0,0,0,0.35);"></canvas>
     <script type="module">
         // Minimal OBJ parser with vt/vn support, builds interleaved buffer (pos,uv,normal)
         function parseOBJWithUVs(text) {
@@ -19,6 +20,7 @@
             for (const line of text.split('\n')) {
                 const parts = line.trim().split(/\s+/);
                 if (!parts[0]) continue;
+                // Pushing positions, uvs, normals, and face into respective array
                 if (parts[0] === 'v') positions.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
                 else if (parts[0] === 'vt') uvs.push([parseFloat(parts[1]), 1.0 - parseFloat(parts[2])]);
                 else if (parts[0] === 'vn') normals.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
@@ -32,22 +34,22 @@
                             const vIdx = parseInt(vStr) - 1;
                             const vtIdx = vtStr ? parseInt(vtStr) - 1 : -1;
                             const vnIdx = vnStr ? parseInt(vnStr) - 1 : -1;
-                            const p = positions[vIdx] || [0,0,0];
-                            const uv = vtIdx >= 0 ? uvs[vtIdx] : [0.5,0.5];
-                            const n = vnIdx >= 0 ? normals[vnIdx] : [0,1,0];
+                            const p = positions[vIdx] || [0, 0, 0];
+                            const uv = vtIdx >= 0 ? uvs[vtIdx] : [0.5, 0.5];
+                            const n = vnIdx >= 0 ? normals[vnIdx] : [0, 1, 0];
                             vertexData.push(p[0], p[1], p[2], uv[0], uv[1], n[0], n[1], n[2]);
                             vi = nextIndex++;
                             vertexMap.set(token, vi);
                         }
                         faceIdx.push(vi);
                     }
-                    for (let i = 1; i < faceIdx.length - 1; ++i) indices.push(faceIdx[0], faceIdx[i], faceIdx[i+1]);
+                    for (let i = 1; i < faceIdx.length - 1; ++i) indices.push(faceIdx[0], faceIdx[i], faceIdx[i + 1]);
                 }
             }
             return { vertexData: new Float32Array(vertexData), indices: new Uint32Array(indices) };
         }
 
-        // --- Math helpers: bounding box, view/projection ---
+        // Math helpers
         function computeBounds(positions) {
             const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
             const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
@@ -92,6 +94,7 @@
             return m;
         }
 
+        // Multiply two 4x4 matrices
         function multiplyMat4(a, b) {
             const out = new Float32Array(16);
             for (let r = 0; r < 4; r++) {
@@ -109,17 +112,17 @@
             const vertCount = vertexData.length / 8;
             const tan1 = new Float32Array(vertCount * 3);
             const tan2 = new Float32Array(vertCount * 3);
-            function addVec(dst, idx, x, y, z) { dst[idx*3+0]+=x; dst[idx*3+1]+=y; dst[idx*3+2]+=z; }
+            function addVec(dst, idx, x, y, z) { dst[idx * 3 + 0] += x; dst[idx * 3 + 1] += y; dst[idx * 3 + 2] += z; }
 
             for (let i = 0; i < indices.length; i += 3) {
-                const i0 = indices[i], i1 = indices[i+1], i2 = indices[i+2];
-                const p0x = vertexData[i0*8+0], p0y = vertexData[i0*8+1], p0z = vertexData[i0*8+2];
-                const p1x = vertexData[i1*8+0], p1y = vertexData[i1*8+1], p1z = vertexData[i1*8+2];
-                const p2x = vertexData[i2*8+0], p2y = vertexData[i2*8+1], p2z = vertexData[i2*8+2];
+                const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+                const p0x = vertexData[i0 * 8 + 0], p0y = vertexData[i0 * 8 + 1], p0z = vertexData[i0 * 8 + 2];
+                const p1x = vertexData[i1 * 8 + 0], p1y = vertexData[i1 * 8 + 1], p1z = vertexData[i1 * 8 + 2];
+                const p2x = vertexData[i2 * 8 + 0], p2y = vertexData[i2 * 8 + 1], p2z = vertexData[i2 * 8 + 2];
 
-                const uv0x = vertexData[i0*8+3], uv0y = vertexData[i0*8+4];
-                const uv1x = vertexData[i1*8+3], uv1y = vertexData[i1*8+4];
-                const uv2x = vertexData[i2*8+3], uv2y = vertexData[i2*8+4];
+                const uv0x = vertexData[i0 * 8 + 3], uv0y = vertexData[i0 * 8 + 4];
+                const uv1x = vertexData[i1 * 8 + 3], uv1y = vertexData[i1 * 8 + 4];
+                const uv2x = vertexData[i2 * 8 + 3], uv2y = vertexData[i2 * 8 + 4];
 
                 const x1 = p1x - p0x, y1 = p1y - p0y, z1 = p1z - p0z;
                 const x2 = p2x - p0x, y2 = p2y - p0y, z2 = p2z - p0z;
@@ -148,43 +151,16 @@
 
             const tangents = new Float32Array(vertCount * 3);
             for (let i = 0; i < vertCount; ++i) {
-                const nx = vertexData[i*8 + 5], ny = vertexData[i*8 + 6], nz = vertexData[i*8 + 7];
-                let tx = tan1[i*3+0], ty = tan1[i*3+1], tz = tan1[i*3+2];
-                const dotNT = nx*tx + ny*ty + nz*tz;
-                tx = tx - nx*dotNT; ty = ty - ny*dotNT; tz = tz - nz*dotNT;
+                const nx = vertexData[i * 8 + 5], ny = vertexData[i * 8 + 6], nz = vertexData[i * 8 + 7];
+                let tx = tan1[i * 3 + 0], ty = tan1[i * 3 + 1], tz = tan1[i * 3 + 2];
+                const dotNT = nx * tx + ny * ty + nz * tz;
+                tx = tx - nx * dotNT; ty = ty - ny * dotNT; tz = tz - nz * dotNT;
                 let len = Math.hypot(tx, ty, tz);
                 if (len === 0) { tx = 1; ty = 0; tz = 0; len = 1; }
                 tx /= len; ty /= len; tz /= len;
-                tangents[i*3+0] = tx; tangents[i*3+1] = ty; tangents[i*3+2] = tz;
+                tangents[i * 3 + 0] = tx; tangents[i * 3 + 1] = ty; tangents[i * 3 + 2] = tz;
             }
             return tangents;
-        }
-
-        async function loadImageBitmap(url) {
-            const res = await fetch(url);
-            const blob = await res.blob();
-            console.log(await blob.text());
-            // const text = await blob.text();
-            const imageBitMap = await createImageBitmap(blob);
-            // let materialCount = 0;
-            // let materials = [], imageTextures = [];
-
-
-            // const lines = text.split('\n');
-            // for (const line of lines) {
-            //     const parts = line.trim().split(/\s+/);
-            //     if (parts[0] === 'newmtl') {
-            //         materials.push({ name: parts[1] })
-            //         imageTextures.push(null);
-            //         materialCount++
-            //     }
-
-            //     if (parts[0] === 'map_Kd') {
-            //         imageTextures[materialCount - 1] = parts[1];
-            //     }
-            // }
-            // return [[materials, imageTextures]];
-            return 1;
         }
 
         async function main() {
@@ -197,10 +173,49 @@
             const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
             context.configure({ device, format: canvasFormat });
 
+            // Resize canvas to fill the page: set backing buffer size to CSS size * devicePixelRatio
+            function resizeCanvasToDisplaySize() {
+                const dpr = window.devicePixelRatio || 1;
+                const displayWidth = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+                const displayHeight = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+                if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                }
+            }
+            // initial resize
+            resizeCanvasToDisplaySize();
+            // keep in sync on resize/orientation changes
+            window.addEventListener('resize', resizeCanvasToDisplaySize);
+            window.addEventListener('orientationchange', resizeCanvasToDisplaySize);
+
             // Load OBJ and build interleaved vertices
             const objRes = await fetch('./meshes/DioramaFinal_forWebGPU_Baking_Fixed_Emission.obj');
             const objText = await objRes.text();
             const { vertexData, indices } = parseOBJWithUVs(objText);
+            // Compute per-vertex tangents and expand vertex data to include tangent (pos,uv,normal,tangent)
+            const tangents = computeTangentsFromVertexData(vertexData, indices);
+            const vertCount = vertexData.length / 8;
+            const expandedVertexData = new Float32Array(vertCount * 11);
+            for (let i = 0; i < vertCount; ++i) {
+                const vOff = i * 8;
+                const eOff = i * 11;
+                // pos
+                expandedVertexData[eOff + 0] = vertexData[vOff + 0];
+                expandedVertexData[eOff + 1] = vertexData[vOff + 1];
+                expandedVertexData[eOff + 2] = vertexData[vOff + 2];
+                // uv
+                expandedVertexData[eOff + 3] = vertexData[vOff + 3];
+                expandedVertexData[eOff + 4] = vertexData[vOff + 4];
+                // normal
+                expandedVertexData[eOff + 5] = vertexData[vOff + 5];
+                expandedVertexData[eOff + 6] = vertexData[vOff + 6];
+                expandedVertexData[eOff + 7] = vertexData[vOff + 7];
+                // tangent
+                expandedVertexData[eOff + 8] = tangents[i * 3 + 0];
+                expandedVertexData[eOff + 9] = tangents[i * 3 + 1];
+                expandedVertexData[eOff + 10] = tangents[i * 3 + 2];
+            }
 
             // Find mtllib in OBJ and parse the MTL for map_Kd
             let mtlName = null;
@@ -223,40 +238,28 @@
                                 const tokens = parts.slice(1);
                                 for (let i = tokens.length - 1; i >= 0; --i) {
                                     const t = tokens[i];
-                                    if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { mapKd = t.replace(/\\/g,'/'); break; }
+                                    if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { mapKd = t.replace(/\\/g, '/'); break; }
                                 }
                                 if (!mapKd) mapKd = tokens[tokens.length - 1];
                                 break;
                             }
                         }
                     }
-                } catch(e) { console.warn('mtl load failed', e); }
+                } catch (e) { console.warn('mtl load failed', e); }
             }
             let texInfo = null;
             if (mapKd) {
                 const fname = mapKd.split('/').pop();
-                const candidates = [`./meshes/${fname}`, `./textures/${fname}`, fname];
-                for (const url of candidates) {
-                    try {
-                        const res = await fetch(url);
-                        if (!res.ok) continue;
-                        const ct = (res.headers.get('content-type') || '').toLowerCase();
-                        if (ct.startsWith('text') || ct.includes('html')) continue;
-                        const blob = await res.blob();
-                        const bitmap = await createImageBitmap(blob);
-                        const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-                        device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
-                        texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear' }) };
-                        break;
-                    } catch (e) { console.warn('texture candidate failed', url, e); }
-                }
-            }
-            if (!texInfo) {
-                // fallback: 1x1 white
-                const data = new Uint8Array([255,255,255,255]);
-                const tex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-                device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: 4 }, [1,1]);
-                texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter:'linear', minFilter:'linear' }) };
+                try {
+                    const res = await fetch(`./meshes/${fname}`);
+                    const ct = (res.headers.get('content-type') || '').toLowerCase();
+                    const blob = await res.blob();
+                    const bitmap = await createImageBitmap(blob);
+                    const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+                    device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
+                    texInfo = { view: tex.createView(), sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear' }) };
+                } catch (e) { console.warn('texture candidate failed', url, e); }
+
             }
 
             // Parse MTL for normal and roughness maps (if we fetched the MTL earlier)
@@ -271,30 +274,28 @@
                     const l = line.trim(); if (!l) continue;
                     const parts = l.split(/\s+/);
                     const key = parts[0];
-                    console.log(key)
                     const tokens = parts.slice(1);
                     if (!tokens.length) continue;
-                    // common keys for normal maps in some workflows
-                    if (!normalName && (key === 'map_Bump' || key.toLowerCase() === 'bump' || key === 'map_bump')) {
+                    // Detect normal maps
+                    if (!normalName && (key === 'map_Bump')) {
                         for (let i = tokens.length - 1; i >= 0; --i) {
-                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { normalName = t.replace(/\\/g,'/'); break; }
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { normalName = t.replace(/\\/g, '/'); break; }
                         }
-                        if (!normalName) normalName = tokens[tokens.length-1];
+                        if (!normalName) normalName = tokens[tokens.length - 1];
                     }
-                    // try to detect roughness maps (non-standard in OBJ/MTL, common keys vary)
-                    if (!roughName && (key.toLowerCase().includes('rough') || key === 'map_Ns' || key.toLowerCase().includes('ns'))) {
-
+                    // Detect roughness maps 
+                    if (!roughName && (key === 'map_Ns')) {
                         for (let i = tokens.length - 1; i >= 0; --i) {
-                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { roughName = t.replace(/\\/g,'/'); break; }
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { roughName = t.replace(/\\/g, '/'); break; }
                         }
-                        if (!roughName) roughName = tokens[tokens.length-1];
+                        if (!roughName) roughName = tokens[tokens.length - 1];
                     }
-                    // emission map (Blender exports as map_Ke)
-                    if (!emissionName && (key === 'map_Ke' || key.toLowerCase() === 'map_ke' || key.toLowerCase().includes('emission') || key.toLowerCase() === 'ke')) {
+                    // Detect emission maps
+                    if (!emissionName && (key === 'map_Ke')) {
                         for (let i = tokens.length - 1; i >= 0; --i) {
-                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { emissionName = t.replace(/\\/g,'/'); break; }
+                            const t = tokens[i]; if (t && /\.(png|jpg|jpeg|bmp)$/i.test(t)) { emissionName = t.replace(/\\/g, '/'); break; }
                         }
-                        if (!emissionName) emissionName = tokens[tokens.length-1];
+                        if (!emissionName) emissionName = tokens[tokens.length - 1];
                     }
                     if (normalName && roughName && emissionName) break;
                 }
@@ -304,67 +305,51 @@
                     // keep both the token (may include a folder) and the basename
                     const token = name;
                     const fname = name.split('/').pop();
-                    const candidates = [
-                        `./textures/${token}`,   // e.g., ./textures/UVs/Roughness.png
-                        `./meshes/${token}`,     // e.g., ./meshes/UVs/Roughness.png
-                        token,                   // e.g., UVs/Roughness.png (relative to root)
-                        `./textures/${fname}`,   // e.g., ./textures/Roughness.png (basename only)
-                        `./meshes/${fname}`,     // e.g., ./meshes/Roughness.png (basename only)
-                        fname                    // e.g., Roughness.png (basename only, relative to root)
-                    ];
-                    for (const url of candidates) {
-                        try {
-                            console.log('trying texture candidate:', url, 'for', name);
-                            const res = await fetch(url);
-                            if (!res.ok) { console.log('not ok', url, res.status); continue; }
-                            const ct = (res.headers.get('content-type') || '').toLowerCase();
-                            if (ct.startsWith('text') || ct.includes('html')) { console.log('skipping non-image', url, ct); continue; }
-                            const blob = await res.blob();
-                            const bitmap = await createImageBitmap(blob);
-                            // Use srgb format for better color handling (Blender baked textures are in sRGB)
-                            const format = (name.toLowerCase().includes('emission') || name.toLowerCase().includes('ke')) ? 'rgba8unorm-srgb' : 'rgba8unorm';
-                            const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-                            device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
-                            console.log('loaded texture', name, 'from', url, 'with format', format);
-                            return tex.createView();
-                        } catch(e) { console.warn('candidate failed', url, e); }
-                    }
+                    try {
+                        console.log('trying texture candidate:', name, 'for', name);
+                        const res = await fetch(`./meshes/${fname}`);
+                        // if (!res.ok) { console.log('not ok', url, res.status); continue; }
+                        const ct = (res.headers.get('content-type') || '').toLowerCase();
+                        const blob = await res.blob();
+                        const bitmap = await createImageBitmap(blob);
+                        // If this is an emission texture, compute and log its average luminance
+                        if (name && (name.toLowerCase().includes('emission') || name.toLowerCase().includes('ke'))) {
+                            try {
+                                const cw = Math.min(64, bitmap.width);
+                                const ch = Math.min(64, bitmap.height);
+                                const tmp = document.createElement('canvas');
+                                tmp.width = cw; tmp.height = ch;
+                                const tctx = tmp.getContext('2d');
+                                tctx.drawImage(bitmap, 0, 0, cw, ch);
+                                const imgd = tctx.getImageData(0, 0, cw, ch).data;
+                                let sum = 0;
+                                for (let i = 0; i < imgd.length; i += 4) {
+                                    // Rec.709 luminance
+                                    sum += 0.2126 * imgd[i] + 0.7152 * imgd[i + 1] + 0.0722 * imgd[i + 2];
+                                }
+                                const avg = sum / (cw * ch * 255);
+                                console.log('emission average luminance (0..1):', avg);
+                            } catch (e) { console.warn('emission luminance analysis failed', e); }
+                        }
+                        // Use srgb format for better color handling (Blender baked textures are in sRGB)
+                        const format = (name.toLowerCase().includes('emission') || name.toLowerCase().includes('ke')) ? 'rgba8unorm-srgb' : 'rgba8unorm';
+                        const tex = device.createTexture({ size: [bitmap.width, bitmap.height, 1], format: format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+                        device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [bitmap.width, bitmap.height]);
+                        console.log('loaded texture', name, 'from', name, 'with format', format);
+                        return tex.createView();
+                    } catch (e) { console.warn('candidate failed', name, e); }
                     console.warn('failed to load texture for', name);
                     return null;
                 }
-
                 normalView = await tryLoadView(normalName);
                 roughView = await tryLoadView(roughName);
                 const emissionViewLoaded = await tryLoadView(emissionName);
                 emissionView = emissionViewLoaded;
             }
 
-            // Create fallbacks if normal/roughness are missing
-            if (!normalView) {
-                const ndata = new Uint8Array([128,128,255,255]);
-                const ntex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-                device.queue.writeTexture({ texture: ntex }, ndata, { bytesPerRow: 4 }, [1,1]);
-                normalView = ntex.createView();
-            }
-            if (!roughView) {
-                const rdata = new Uint8Array([128,128,128,255]);
-                const rtex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-                device.queue.writeTexture({ texture: rtex }, rdata, { bytesPerRow: 4 }, [1,1]);
-                roughView = rtex.createView();
-            }
-
-            // emission fallback (dark gray for better visibility)
-            if (typeof emissionView === 'undefined' || !emissionView) {
-                console.log('Creating fallback emissionView (was null or undefined)');
-                const edata = new Uint8Array([50,50,50,255]);
-                const etex = device.createTexture({ size: [1,1,1], format: 'rgba8unorm-srgb', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-                device.queue.writeTexture({ texture: etex }, edata, { bytesPerRow: 4 }, [1,1]);
-                emissionView = etex.createView();
-            }
-
-            // create GPU buffers
-            const vertexBuffer = device.createBuffer({ label: 'vb', size: vertexData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
-            new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
+            // create GPU buffers (expanded vertex data includes tangent)
+            const vertexBuffer = device.createBuffer({ label: 'vb', size: expandedVertexData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
+            new Float32Array(vertexBuffer.getMappedRange()).set(expandedVertexData);
             vertexBuffer.unmap();
 
             const indexBuffer = device.createBuffer({ label: 'ib', size: indices.length * 4, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
@@ -372,50 +357,79 @@
             indexBuffer.unmap();
             const indexCount = indices.length;
 
-            // shader (MVP + sampler + albedo + emission + roughness)
-            const module = device.createShaderModule({ code: `
-                struct Uniforms { mvp: mat4x4f };
+            // shader (MVP + sampler + colour + emission + roughness)
+            const module = device.createShaderModule({
+                code: `
+                struct Uniforms { mvp: mat4x4f, flags: vec4f, exposureAndPad: vec4f };
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
                 @group(0) @binding(1) var samp: sampler;
-                @group(0) @binding(2) var albedo: texture_2d<f32>;
+                @group(0) @binding(2) var colour: texture_2d<f32>;
                 @group(0) @binding(3) var emissionTex: texture_2d<f32>;
-                @group(0) @binding(4) var roughMap: texture_2d<f32>;
+                @group(0) @binding(4) var normalMap: texture_2d<f32>;
+                @group(0) @binding(5) var roughMap: texture_2d<f32>;
 
-                struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) normal: vec3f };
+                struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) normal: vec3f, @location(2) tangent: vec3f, @location(3) worldPos: vec3f };
 
-                @vertex fn vs(@location(0) pos: vec3f, @location(1) uv: vec2f, @location(2) normal: vec3f) -> VOut {
-                    var o: VOut; o.pos = uniforms.mvp * vec4f(pos, 1.0); o.uv = uv; o.normal = normal; return o;
+                @vertex fn vs(@location(0) pos: vec3f, @location(1) uv: vec2f, @location(2) normal: vec3f, @location(3) tangent: vec3f) -> VOut {
+                    var o: VOut;
+                    o.pos = uniforms.mvp * vec4f(pos, 1.0);
+                    o.uv = uv;
+                    o.normal = normal;
+                    o.tangent = tangent;
+                    // pass model-space position through so fragment shader can compute view vector
+                    o.worldPos = pos;
+                    return o;
                 }
 
                 fn clamp01(x: f32) -> f32 { return max(0.0, min(1.0, x)); }
 
                 @fragment fn fs(i: VOut) -> @location(0) vec4f {
-                    let c = textureSample(albedo, samp, i.uv);
+                    let c = textureSample(colour, samp, i.uv);
                     let e = textureSample(emissionTex, samp, i.uv);
                     let roughSample = textureSample(roughMap, samp, i.uv);
                     let rough = roughSample.r;
-                    
-                    let N = normalize(i.normal);
-                    let L = normalize(vec3f(1.0,1.0,1.0));
-                    let V = normalize(vec3f(-0.5, -0.3, 1.0));
-                    let ambient = 0.3;
-                    let NdotL = max(dot(N, L), 0.0);
+
+                    // Tangent-space normal mapping
+                    let N_vert = normalize(i.normal);
+                    let T = normalize(i.tangent);
+                    let B = normalize(cross(N_vert, T));
+                    let nSample = textureSample(normalMap, samp, i.uv).rgb;
+                    let nTS = nSample * 2.0 - vec3f(1.0);
+                    let mappedN = normalize(vec3f(dot(vec3f(T.x, B.x, N_vert.x), nTS), dot(vec3f(T.y, B.y, N_vert.y), nTS), dot(vec3f(T.z, B.z, N_vert.z), nTS)));
+
+                    // Lighting
+                    // treat the light as a (large) point light at a fixed position so lighting varies with surface position
+                    let lightPos = vec3f(50.0, 100.0, -50.0);
+                    let L = normalize(lightPos - i.worldPos);
+                    let V = normalize(uniforms.flags.yzw - i.worldPos);
+                    let ambient = 0.1;
+                    let NdotL = max(dot(mappedN, L), 0.0);
                     let diffuse = c.rgb * NdotL;
-                    
-                    // Roughness: 0=shiny, 1=dull
-                    let shininess = mix(1024.0, 2.0, clamp01(rough));
-                    let H = normalize(L + V);
-                    let specPower = pow(max(dot(N, H), 0.0), shininess);
-                    let specular = vec3f(specPower) * 10.0;
-                    
-                    // Emission: use the brightest channel to boost visibility
-                    // This works well for baked emission maps that may have subtle values
-                    let emissionBrightness = max(max(e.r, e.g), e.b);
-                    let emissionBoost = emissionBrightness * 200.0;
-                    let emission = e.rgb * emissionBoost;
-                    
-                    let color = vec3f(ambient * c.rgb) + diffuse + specular + emission;
-                    // Apply simple tone mapping to prevent oversaturation but allow bright areas
+
+                    // limit maximum shininess to avoid extremely sharp 'diamond' highlights
+                    let shininess = mix(256.0, 2.0, clamp01(rough));
+                    let H = normalize(L + V);   
+                    let specPower = pow(max(dot(mappedN, H), 0.0), shininess);
+                    // reduce raw specular multiplier to avoid bright white highlights
+                    let SPECULAR_MULT: f32 = 2.0;
+                    let specular = vec3f(specPower) * SPECULAR_MULT;
+
+                    // emission boost and saturation come from uniforms.exposureAndPad.y/z
+                    let EMISSION_BOOST: f32 = uniforms.exposureAndPad.y;
+                    let EMISSION_SAT: f32 = uniforms.exposureAndPad.z;
+                    // apply saturation to the sampled emission color 
+                    let e_lum = dot(e.rgb, vec3f(0.2126, 0.7152, 0.0722));
+                    let e_sat = mix(vec3f(e_lum), e.rgb, EMISSION_SAT);
+                    // allow HDR emission (no hard clamp) so boosting and post effects can work
+                    var emission = e_sat * EMISSION_BOOST;
+
+                    var color = vec3f(ambient * c.rgb) + diffuse + specular;
+                    // Apply exposure (set by JS). Exposure scales linear radiance before tone mapping.
+                    let exposure = uniforms.exposureAndPad.x;
+                    color = color * exposure;
+                    // multiply emission by uniforms.flags.x 
+                    color = color + emission * uniforms.flags.x;
+
                     let toneMapped = color / (color + vec3f(1.0));
                     return vec4f(toneMapped, c.a);
                 }
@@ -424,37 +438,172 @@
             // Create pipeline with depth/stencil and disable face culling initially
             const pipeline = device.createRenderPipeline({
                 layout: 'auto',
-                vertex: { module, entryPoint: 'vs', buffers: [{ arrayStride: 32, attributes: [{ shaderLocation:0, offset:0, format:'float32x3' }, { shaderLocation:1, offset:12, format:'float32x2' }, { shaderLocation:2, offset:20, format:'float32x3' }] }] },
+                vertex: { module, entryPoint: 'vs', buffers: [{ arrayStride: 44, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x2' }, { shaderLocation: 2, offset: 20, format: 'float32x3' }, { shaderLocation: 3, offset: 32, format: 'float32x3' }] }] },
                 fragment: { module, entryPoint: 'fs', targets: [{ format: canvasFormat }] },
                 primitive: { topology: 'triangle-list', cullMode: 'none' },
                 depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
             });
 
-            // compute camera MVP
+            // compute bounds and initialize interactive camera 
             const posArray = [];
-            for (let i = 0; i < vertexData.length; i += 8) posArray.push(vertexData[i], vertexData[i+1], vertexData[i+2]);
+            for (let i = 0; i < vertexData.length; i += 8) posArray.push(vertexData[i], vertexData[i + 1], vertexData[i + 2]);
             const bounds = computeBounds(posArray);
-            const dir = [1,0.6,1]; let dlen = Math.hypot(...dir); if (dlen===0) dlen=1; dir[0]/=dlen; dir[1]/=dlen; dir[2]/=dlen;
-            const distance = bounds.radius * 3.5 + 1.0;
-            const eye = [bounds.center[0] + dir[0]*distance, bounds.center[1] + dir[1]*distance, bounds.center[2] + dir[2]*distance];
-            const view = lookAt(eye, bounds.center, [0,1,0]);
-            const proj = perspective(Math.PI/3, canvas.width/canvas.height, Math.max(bounds.radius*0.01,0.01), bounds.radius*20+10);
-            const mvp = multiplyMat4(proj, view);
 
-            const uniformBuffer = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-            device.queue.writeBuffer(uniformBuffer, 0, mvp);
+            // initial camera direction and distance based on bounds
+            const initDir = [1, 0.6, 1]; let dlen = Math.hypot(...initDir); if (dlen === 0) dlen = 1; initDir[0] /= dlen; initDir[1] /= dlen; initDir[2] /= dlen;
+            const initDistance = bounds.radius * 2.5;
 
-            console.log('Creating bind group with:', { emissionView, roughView, normalView });
-            const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [ { binding:0, resource:{ buffer: uniformBuffer } }, { binding:1, resource: texInfo.sampler }, { binding:2, resource: texInfo.view }, { binding:3, resource: emissionView }, { binding:4, resource: roughView } ] });
+            // Interactive camera state
+            const camera = {
+                target: [bounds.center[0], bounds.center[1], bounds.center[2]],
+                yaw: 2.4,
+                pitch: 0.15,
+                distance: initDistance,
+                minDistance: Math.max(0.1, bounds.radius * 0.5),
+                maxDistance: Math.max(1.0, bounds.radius * 50),
+                pan: [0, 0, 0]
+            };
+
+           
+            const uniformBuffer = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+            // Press L to toggle emission 
+            let EMISSION_ENABLED = 1.0;
+            // exposure defaults: when emission is on we want a dimmer scene; when off, a brighter scene
+            let exposure = 0.8
+            window.addEventListener('keydown', (ev) => {
+                if (ev.key === 'l' || ev.key === 'L') {
+                    EMISSION_ENABLED = EMISSION_ENABLED ? 0.0 : 1.0;
+                }
+            });
+
+            // A slider for tuning light brightness (exposure)
+            const ui = document.createElement('div');
+            ui.style.position = 'absolute'; ui.style.left = '8px'; ui.style.top = '8px'; ui.style.padding = '6px'; ui.style.background = 'rgba(0,0,0,0.35)'; ui.style.color = 'white'; ui.style.fontFamily = 'sans-serif'; ui.style.fontSize = '12px'; ui.style.borderRadius = '4px';
+            ui.innerHTML = `Scene Light: <input id="exposureSlider" type="range" min="0.1" max="2.0" step="0.01" value="${exposure}" style="vertical-align:middle;width:160px"> <span id="exposureValue">${exposure}</span>`;
+            document.body.appendChild(ui);
+            const exposureSlider = document.getElementById('exposureSlider');
+            const exposureValue = document.getElementById('exposureValue');
+            exposureSlider.addEventListener('input', (e) => {
+                exposure = parseFloat(exposureSlider.value);
+                exposureValue.textContent = exposure.toFixed(2);
+            });
+
+            console.log('Creating bind group with:', { emissionView, roughView, normalView, colourView: texInfo.view });
+            const bindGroup = device.createBindGroup({
+                layout: pipeline.getBindGroupLayout(0), entries: [
+                    { binding: 0, resource: { buffer: uniformBuffer } },
+                    { binding: 1, resource: texInfo.sampler },
+                    { binding: 2, resource: texInfo.view },
+                    { binding: 3, resource: emissionView },
+                    { binding: 4, resource: normalView },
+                    { binding: 5, resource: roughView }
+                ]
+            });
             console.log('Bind group created successfully');
 
             // Create a depth texture to enable proper depth testing so triangles render correctly
             let depthTexture = device.createTexture({ size: [canvas.width, canvas.height, 1], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
             const renderPassDescriptor = {
-                colorAttachments: [{ clearValue:[1,0.9,0.8,1], loadOp:'clear', storeOp:'store' }],
+                // Background set to RGB(130,158,207) -> normalized ~[0.50980,0.61961,0.81176]
+                colorAttachments: [{ clearValue: [0.50980392, 0.61960784, 0.81176471, 1], loadOp: 'clear', storeOp: 'store' }],
                 depthStencilAttachment: { view: depthTexture.createView(), depthClearValue: 1.0, depthLoadOp: 'clear', depthStoreOp: 'store' }
             };
 
+            // Interaction handlers (left-drag to rotate, Shift+left-drag to pan, wheel to zoom)
+            let dragging = false;
+            let lastX = 0, lastY = 0;
+
+            function updateMVPAndWrite() {
+                const aspect = canvas.width / canvas.height;
+                const proj = perspective(Math.PI / 3, aspect, Math.max(bounds.radius * 0.01, 0.01), bounds.radius * 20 + 10);
+
+                // spherical to cartesian
+                const r = camera.distance;
+                const cp = Math.cos(camera.pitch), sp = Math.sin(camera.pitch);
+                const cy = Math.cos(camera.yaw), sy = Math.sin(camera.yaw);
+                const eye = [
+                    camera.target[0] + r * cp * sy,
+                    camera.target[1] + r * sp,
+                    camera.target[2] + r * cp * cy
+                ];
+
+                const view = lookAt(eye, camera.target, [0, 1, 0]);
+                const mvp = multiplyMat4(proj, view);
+                // write mvp (16 floats) + flags (4 floats) = 20 floats total
+                const ub = new Float32Array(24);
+                ub.set(mvp, 0);
+                ub[16] = EMISSION_ENABLED; // flags.x
+                // pack camera eye position into flags.yzw so shader can compute per-fragment V
+                ub[17] = eye[0]; ub[18] = eye[1]; ub[19] = eye[2];
+                // exposure stored in exposureAndPad.x at ub[20]
+                ub[20] = exposure;
+                ub[21] = 3.5; // EMISSION_BOOST default 
+                ub[22] = 2.5; // EMISSION_SAT default 
+                ub[23] = 0.0;
+                device.queue.writeBuffer(uniformBuffer, 0, ub);
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                // Only start dragging for the primary (left) button.
+                if (e.button !== 0) return;
+                canvas.setPointerCapture(e.pointerId);
+                dragging = true; lastX = e.clientX; lastY = e.clientY;
+                canvas.style.cursor = 'grabbing';
+            });
+            canvas.addEventListener('pointerup', (e) => {
+                try { canvas.releasePointerCapture(e.pointerId); } catch (err) { }
+                dragging = false; canvas.style.cursor = 'default';
+            });
+            canvas.addEventListener('pointercancel', (e) => { dragging = false; canvas.style.cursor = 'default'; });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+                lastX = e.clientX; lastY = e.clientY;
+                const rect = canvas.getBoundingClientRect();
+                const w = rect.width, h = rect.height;
+                // If Shift is held, pan; otherwise rotate (left-drag).
+                if (e.shiftKey) {
+                    // pan: translate camera.target in world space based on camera axes
+                    const r = camera.distance;
+                    const cp = Math.cos(camera.pitch), sp = Math.sin(camera.pitch);
+                    const cy = Math.cos(camera.yaw), sy = Math.sin(camera.yaw);
+                    const eye = [
+                        camera.target[0] + r * cp * sy,
+                        camera.target[1] + r * sp,
+                        camera.target[2] + r * cp * cy
+                    ];
+                    const forward = [camera.target[0] - eye[0], camera.target[1] - eye[1], camera.target[2] - eye[2]];
+                    const flen = Math.hypot(...forward) || 1.0;
+                    forward[0] /= flen; forward[1] /= flen; forward[2] /= flen;
+                    const up = [0, 1, 0];
+                    const right = [
+                        forward[2] * up[1] - forward[1] * up[2],
+                        forward[0] * up[2] - forward[2] * up[0],
+                        forward[1] * up[0] - forward[0] * up[1]
+                    ];
+                    const rlen = Math.hypot(...right) || 1.0; right[0] /= rlen; right[1] /= rlen; right[2] /= rlen;
+                    const panSpeed = camera.distance * 0.002;
+                    camera.target[0] += (-dx * panSpeed) * right[0] + (dy * panSpeed) * up[0];
+                    camera.target[1] += (-dx * panSpeed) * right[1] + (dy * panSpeed) * up[1];
+                    camera.target[2] += (-dx * panSpeed) * right[2] + (dy * panSpeed) * up[2];
+                } else {
+                    const rotSpeed = 0.005;
+                    camera.yaw -= dx * rotSpeed;
+                    camera.pitch += dy * rotSpeed;
+                    camera.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, camera.pitch));
+                }
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.0015;
+                camera.distance *= (1 + e.deltaY * zoomSpeed);
+                camera.distance = Math.max(camera.minDistance, Math.min(camera.maxDistance, camera.distance));
+            }, { passive: false });
+
+            // --- Render loop (updates mvp each frame based on camera)
             function render() {
                 // If canvas size changed, recreate depth texture
                 const curTex = context.getCurrentTexture();
@@ -465,6 +614,10 @@
                     depthTexture = device.createTexture({ size: [gfxWidth, gfxHeight, 1], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
                     renderPassDescriptor.depthStencilAttachment.view = depthTexture.createView();
                 }
+
+                // update MVP from camera before drawing
+                updateMVPAndWrite();
+
                 const cmd = device.createCommandEncoder();
                 const pass = cmd.beginRenderPass(renderPassDescriptor);
                 pass.setPipeline(pipeline);
@@ -474,9 +627,11 @@
                 pass.drawIndexed(indexCount);
                 pass.end();
                 device.queue.submit([cmd.finish()]);
+
+                requestAnimationFrame(render);
             }
 
-            render();
+            requestAnimationFrame(render);
         }
         main();
     </script>
