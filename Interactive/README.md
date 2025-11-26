@@ -1,4 +1,3 @@
-
 ## Interactive Diorama WebGPU Viewer
 
 ### Description
@@ -44,10 +43,15 @@ These textures are loaded and used in the fragment shader to create realistic ma
 
 The vertex shader transforms 3D geometry and passes attributes (UVs, normals, tangents, world position) to the fragment shader. The fragment shader combines the material textures with lighting and emission calculations, then applies tone mapping to adjust colours for bright and dark areas. 
 
+###Interaction:
+Implemented interactive camera controls, allowing users to orbit, pan, and zoom around the diorama using the mouse. A brightness slider was added to adjust scene brightness in real time, and a keyboard toggle on key "L" was provided to enable or disable emission effects. 
+
 ### File Structure
 - `diorama.html` — Main application (all logic and shaders)
 - `meshes/` — Contains OBJ models and UV map png for colours, roughness, normals, emissions
 - `textures/` — Contains the mtl file
 - `README.md` — This documentation
+
+
 
 
