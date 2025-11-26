@@ -406,7 +406,7 @@
                     let NdotL = max(dot(mappedN, L), 0.0);
                     let diffuse = c.rgb * NdotL;
 
-                    // limit maximum shininess to avoid extremely sharp 'diamond' highlights
+                    // limit maximum shininess to avoid extremely sharp highlights
                     let shininess = mix(256.0, 2.0, clamp01(rough));
                     let H = normalize(L + V);   
                     let specPower = pow(max(dot(mappedN, H), 0.0), shininess);
